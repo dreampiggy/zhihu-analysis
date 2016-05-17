@@ -3,6 +3,7 @@ var request = require('superagent');
 var cheerio = require('cheerio');
 var config = require('./config');
 var Question = require('./question');
+var Topic = require('./topic');
 
 function sendQuestionRequest(time) {
 	let url = 'http://api.kanzhihu.com/getpostanswers/' + time + '/recent';
@@ -42,22 +43,26 @@ function getTopic(questionID) {
 				return;
 			}
 			let $ = cheerio.load(res.text);
-			let topicArr = $(topicTag).text().split('\n').filter( (v) => {
-				if (v.length == 0) {
-					return false;
-				}
-				return true;
+			let topicArr = [];
+			$(topicTag).each( (i, elem) => {
+				let v = $(elem);
+				let name = v.text().replace(/\n/g, '');
+				let id = parseInt(v.attr('href').replace('/topic/', ''));
+				topicArr.push({
+					name: name,
+					id: id
+				});
 			});
+
 			let followNum = $(followTag).text().match(/\d/g);
 			if (followNum == null) {
 				followNum = 0;
 			} else {
 				followNum = parseInt(followNum.join(''));
 			}
-			let topicString = topicArr.toString();
 			resolve({
-				topic: topicString,
-				follownum: followNum
+				topicArr: topicArr,
+				followNum: followNum
 			});
 		})
 	});
@@ -72,11 +77,14 @@ function getQuestion(time) {
 			setTimeout( () => {
 				let topicStringP = getTopic(question.questionid);
 				topicStringP.then( (res) => {
-					Question.build({
+					let topicString = res.topicArr.map( (v) => {
+						return v.name;
+					}).toString();
+					let questionInstance = Question.build({
 						title: question.title,
 						time: question.time,
-						topic: res.topic,
-						follownum: res.follownum,
+						topics: topicString,
+						follownum: res.followNum,
 						summary: question.summary,
 						questionid: question.questionid,
 						answerid: question.answerid,
@@ -84,17 +92,34 @@ function getQuestion(time) {
 						authorhash: question.authorhash,
 						avatar: question.avatar,
 						vote: question.vote
-					})
-					.save()
-					.then( (res) => {
-						console.log(question.questionid, " success");
+					});
+					questionInstance.save()
+					.then( () => {
+						res.topicArr.forEach( (topic, i) => {
+							let topicInstance = Topic.findOrCreate({
+								where: {id: topic.id},
+								defaults: {name: topic.name}
+							})
+							.spread( (topicInstance, created) => {
+								topicInstance.count++;
+								topicInstance.save();
+								questionInstance.setDataValue('topic'+i, topicInstance.id);
+								questionInstance.save()
+								.then( () => {
+									console.log(question.questionid, " success");
+								})
+								.catch( () => {
+									console.log(question.questionid, " db save topic error");
+								})
+							})
+						})
 					})
 					.catch( (err) => {
 						console.error(question.questionid, " db error for reason: ", err);
 					})
 				})
-			}, 10000 + sleepOffset);
-			sleepOffset += 10000;
+			}, config.zhihu_sleep + sleepOffset);
+			sleepOffset += config.zhihu_sleep;
 		})
 	})
 	.catch( (err) => {
@@ -104,17 +129,17 @@ function getQuestion(time) {
 
 
 function start() {
-	let startTime = new Date(config.begin_time);
+	let startTime = new Date(config.start_year, config.start_month, config.start_day);
 	let endTime = new Date().getTime();
 	let sleepOffset = 0;
 	while (startTime.getTime() < endTime) {
 		let timeString = dateToString(startTime);
 		setTimeout( () => {
 			getQuestion(timeString);
-		}, 1000 + sleepOffset);
-		let nextDay = startTime.getTime() + config.interval_days * 24 * 60 * 60 * 1000;
+		}, config.kanzhihu_sleep + sleepOffset);
+		let nextDay = startTime.getTime() + config.kanzhihu_interval;
 		startTime.setTime(nextDay);
-		sleepOffset += 1000;
+		sleepOffset += config.kanzhihu_sleep;
 	}
 }
 
