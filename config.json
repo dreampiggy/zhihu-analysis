@@ -1,0 +1,10 @@
+{
+    "dbtype": "mysql",
+    "dbserver": "localhost",
+    "dbport": 3306,
+    "dbname": "zhihu_analysis",
+    "dbuser": "root",
+    "dbpassword": "123456",
+    "begin_time": "2014-9-20T12:00:00",
+    "interval_days": 1
+}
