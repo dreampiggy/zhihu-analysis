@@ -71,7 +71,6 @@ function getTopic(questionID) {
 
 function getQuestion(time) {
 	sendQuestionRequest(time).then( (res) => {
-		console.log(time, " load");
 		let sleepOffset = 0;
 		res.forEach( (question) => {
 			setTimeout( () => {
@@ -95,7 +94,7 @@ function getQuestion(time) {
 					});
 					questionInstance.save()
 					.then( () => {
-						res.topicArr.forEach( (topic, i) => {
+						Promise.all(res.topicArr.map( (topic, i) => {
 							let topicInstance = Topic.findOrCreate({
 								where: {id: topic.id},
 								defaults: {name: topic.name}
@@ -105,13 +104,18 @@ function getQuestion(time) {
 								topicInstance.save();
 								questionInstance.setDataValue('topic'+i, topicInstance.id);
 								questionInstance.save()
-								.then( () => {
-									console.log(question.questionid, " success");
-								})
 								.catch( () => {
 									console.log(question.questionid, " db save topic error");
 								})
 							})
+						}))
+						.then( () => {
+							console.log("questionid: " + questionInstance.questionid + " success. answerid: "
+								+ questionInstance.answerid
+								+ " topics: " + questionInstance.topics);
+						})
+						.catch( (err) => {
+							console.error(question.questionid, " db error for reason: ", err);
 						})
 					})
 					.catch( (err) => {
@@ -129,6 +133,7 @@ function getQuestion(time) {
 
 
 function start() {
+	console.log("start");
 	let startTime = new Date(config.start_year, config.start_month, config.start_day);
 	let endTime = new Date().getTime();
 	let sleepOffset = 0;

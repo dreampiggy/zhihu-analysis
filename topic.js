@@ -4,7 +4,7 @@ var Question = require('./question');
 var config = require('./config');
 
 var Topic = sequelize.define('topic', {
-	name: {type: Sequelize.STRING, unique: true},
+	name: Sequelize.STRING,
 	count: {type: Sequelize.INTEGER, defaultValue: 0}
 });
 
